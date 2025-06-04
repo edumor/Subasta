@@ -21,6 +21,7 @@ contract Auction {
     mapping(address => uint) public lastBid;
     mapping(address => uint) private bidIndex;
     mapping(address => bool) private hasBid;
+    mapping(address => uint) public lastBidTime; // NUEVO: para controlar el tiempo entre ofertas
 
     bool public ended;
     bool private fundsWithdrawn = false;
@@ -56,12 +57,17 @@ contract Auction {
     /**
      * @dev Permite a los usuarios realizar una oferta. La oferta debe ser al menos un 5% mayor que la oferta más alta actual.
      *      Extiende automáticamente el tiempo de la subasta si la oferta se realiza cerca del final.
+     *      Ahora requiere suficiente ETH para cubrir la nueva oferta y limita la frecuencia de ofertas por usuario.
      */
     function bid() external payable onlyWhileActive {
         require(msg.sender != owner, "Owner cannot bid");
         require(msg.sender != address(0), "Invalid address");
         require(msg.value > 0, "You must send ETH to bid");
         require(!ended, "Auction already ended");
+
+        // NUEVO: tiempo mínimo entre ofertas del mismo usuario (1 minuto)
+        require(block.timestamp > lastBidTime[msg.sender] + 1 minutes, "Wait at least 1 minute between bids");
+        lastBidTime[msg.sender] = block.timestamp;
 
         uint newBid = lastBid[msg.sender] + msg.value;
 
@@ -70,6 +76,9 @@ contract Auction {
             highestBid == 0 || newBid >= highestBid + (highestBid * 5 / 100),
             "Bid must be at least 5% higher than current"
         );
+
+        // NUEVO: asegurar suficiente ETH para la nueva oferta
+        require(msg.value >= newBid - lastBid[msg.sender], "Insufficient ETH sent for new bid");
 
         // No puedes ofertar si ya eres el mejor postor
         require(msg.sender != highestBidder, "You are already the highest bidder");
