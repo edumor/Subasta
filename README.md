@@ -3,7 +3,7 @@ El contrato implementa una subasta en la blockchain de Ethereum, donde los usuar
 Detalle de Funcionamiento
 1. Inicialización
 •
-El propietario (owner) despliega el contrato y define la duración de la subasta en minutos.
+El propietario (owner) despliega el contrato y define la duración de la subasta en días.
 •
 Se establece el tiempo de finalización (auctionEndTime) y se inicializan las variables de control.
 2. Ofertas (bid)
