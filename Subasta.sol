@@ -103,7 +103,7 @@ contract Auction {
             hasBid[msg.sender] = true;
         }
 
-        // Extensión automática si la oferta se realiza cerca del final
+        // Extensión automática si la oferta se realiza cerca del final 10 minutos
 
         if (block.timestamp + 10 minutes > auctionEndTime && extendedTime < maxExtensionTime) {
             uint newExtension = 10 minutes;
@@ -125,13 +125,13 @@ contract Auction {
         require(deposit > bidAmount, "No excess to withdraw");
         require(deposit > 0, "No deposit to withdraw");
 
-        uint excess = deposit - bidAmount;
-        deposits[msg.sender] = bidAmount;
+        uint excess = deposit - bidAmount; // calcula el exceso sobre su ultima oferta valida
+        deposits[msg.sender] = bidAmount; // actualiza el deposito del usuario a igualar su ultima oferta
 
-        (bool success, ) = payable(msg.sender).call{value: excess}("");
+        (bool success, ) = payable(msg.sender).call{value: excess}(""); // envia el exceso al usuario
         require(success, "Failed to transfer excess");
 
-        emit PartialWithdrawal(msg.sender, excess);
+        emit PartialWithdrawal(msg.sender, excess); // registra el reembolso parcial
     }
 
     // Permite a los ofertantes (excepto el ganador) retirar su depósito menos una comisión del 2% después de que la subasta finaliza.
