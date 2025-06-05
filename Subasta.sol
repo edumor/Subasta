@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 contract Auction {
     address public owner;
     uint public auctionEndTime;
-    uint public maxExtensionTime = 7 days;
+    uint public maxExtensionTime = 7 days;  // extension del contrato por 7 dias
     uint public extendedTime = 0;
 
     address public highestBidder;
@@ -21,7 +21,7 @@ contract Auction {
     mapping(address => uint) public lastBid;
     mapping(address => uint) private bidIndex;
     mapping(address => bool) private hasBid;
-    mapping(address => uint) public lastBidTime; // NUEVO: para controlar el tiempo entre ofertas
+    mapping(address => uint) public lastBidTime; // para controlar el tiempo entre ofertas
 
     bool public ended;
     bool private fundsWithdrawn = false;
@@ -48,6 +48,9 @@ contract Auction {
         _;
     }
 
+    /** punto1: Seguidamente defino el constructor que parametriza los componentes 
+        necesarios para el funcionamiento del contrato */
+
     constructor(uint _durationMinutes) {
         require(_durationMinutes > 0, "Duration must be greater than zero");
         owner = msg.sender;
@@ -55,7 +58,7 @@ contract Auction {
     }
 
     /**
-     * @dev Permite a los usuarios realizar una oferta. La oferta debe ser al menos un 5% mayor que la oferta más alta actual.
+     *  Permite a los usuarios realizar una oferta. La oferta debe ser al menos un 5% mayor que la oferta más alta actual.
      *      Extiende automáticamente el tiempo de la subasta si la oferta se realiza cerca del final.
      *      Ahora requiere suficiente ETH para cubrir la nueva oferta y limita la frecuencia de ofertas por usuario.
      */
@@ -65,22 +68,26 @@ contract Auction {
         require(msg.value > 0, "You must send ETH to bid");
         require(!ended, "Auction already ended");
 
-        // NUEVO: tiempo mínimo entre ofertas del mismo usuario (1 minuto)
+        // tiempo mínimo entre ofertas del mismo usuario (1 minuto)
+        
         require(block.timestamp > lastBidTime[msg.sender] + 1 minutes, "Wait at least 1 minute between bids");
         lastBidTime[msg.sender] = block.timestamp;
 
         uint newBid = lastBid[msg.sender] + msg.value;
 
         // La nueva oferta debe ser al menos un 5% mayor que la oferta más alta actual
+
         require(
             highestBid == 0 || newBid >= highestBid + (highestBid * 5 / 100),
             "Bid must be at least 5% higher than current"
         );
 
-        // NUEVO: asegurar suficiente ETH para la nueva oferta
+        // asegurar suficiente ETH para la nueva oferta
+
         require(msg.value >= newBid - lastBid[msg.sender], "Insufficient ETH sent for new bid");
 
         // No puedes ofertar si ya eres el mejor postor
+
         require(msg.sender != highestBidder, "You are already the highest bidder");
 
         deposits[msg.sender] += msg.value;
@@ -97,6 +104,7 @@ contract Auction {
         }
 
         // Extensión automática si la oferta se realiza cerca del final
+
         if (block.timestamp + 10 minutes > auctionEndTime && extendedTime < maxExtensionTime) {
             uint newExtension = 10 minutes;
             extendedTime += newExtension;
@@ -108,9 +116,8 @@ contract Auction {
         emit NewBid(msg.sender, newBid);
     }
 
-    /**
-     * @dev Permite a los ofertantes retirar cualquier exceso de depósito que no esté incluido en su última oferta mientras la subasta está activa.
-     */
+    // Permite a los ofertantes retirar cualquier exceso de depósito que no esté incluido en su última oferta mientras la subasta está activa.
+   
     function partialWithdraw() external onlyWhileActive {
         require(msg.sender != address(0), "Invalid address");
         uint deposit = deposits[msg.sender];
@@ -127,9 +134,8 @@ contract Auction {
         emit PartialWithdrawal(msg.sender, excess);
     }
 
-    /**
-     * @dev Permite a los ofertantes (excepto el ganador) retirar su depósito menos una comisión del 2% después de que la subasta finaliza.
-     */
+    // Permite a los ofertantes (excepto el ganador) retirar su depósito menos una comisión del 2% después de que la subasta finaliza.
+
     function withdrawDeposit() external onlyWhenEnded {
         require(msg.sender != highestBidder, "Winner cannot withdraw");
         require(msg.sender != address(0), "Invalid address");
@@ -147,6 +153,7 @@ contract Auction {
         emit DepositWithdrawn(msg.sender, payout, fee);
 
         // Opcionalmente, transfiere la comisión al propietario
+
         if (fee > 0) {
             (bool feeSuccess, ) = payable(owner).call{value: fee}("");
             require(feeSuccess, "Failed to transfer fee");
@@ -154,17 +161,15 @@ contract Auction {
         }
     }
 
-    /**
-     * @dev Permite al propietario finalizar la subasta manualmente.
-     */
+    // Permite al propietario finalizar la subasta manualmente.
+  
     function endAuction() external onlyOwner onlyWhileActive {
         ended = true;
         emit AuctionEnded(highestBidder, highestBid);
     }
 
-    /**
-     * @dev Permite al propietario retirar la oferta más alta después de que la subasta finaliza.
-     */
+    // Permite al propietario retirar la oferta más alta después de que la subasta finaliza.
+    
     function withdrawFunds() external onlyOwner onlyWhenEnded {
         require(!fundsWithdrawn, "Funds already withdrawn");
         require(highestBid > 0, "No funds to withdraw");
@@ -174,26 +179,29 @@ contract Auction {
         require(success, "Failed to withdraw funds");
     }
 
-    /**
-     * @dev Permite al propietario cancelar la subasta antes de que se realicen ofertas.
-     */
+    // Permite al propietario cancelar la subasta antes de que se realicen ofertas.
+   
     function cancelAuction() external onlyOwner onlyWhileActive {
         require(highestBid == 0, "Cannot cancel after bids have been placed");
         ended = true;
         emit AuctionCancelled();
     }
 
-    /**
-     * @dev Devuelve el número de ofertas realizadas.
-     */
+    // Devuelve el número de ofertas realizadas.
+    
     function getBidCount() external view returns (uint) {
         return bidHistory.length;
     }
 
-    /**
-     * @dev Devuelve el historial de ofertas.
-     */
+    // Devuelve el historial de ofertas.
+    
     function getBidHistory() external view returns (Bid[] memory) {
         return bidHistory;
+    }
+
+    // Devuelve el ganador y el valor de la oferta ganadora.
+     
+    function getWinner() external view returns (address, uint) {
+        return (highestBidder, highestBid);
     }
 }
