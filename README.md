@@ -21,6 +21,8 @@ Cuando la subasta termina, los ofertantes que no ganaron pueden retirar su
 depósito, menos una comisión del 2% que se transfiere al propietario.
 El ganador no puede retirar su depósito, ya que este corresponde al pago de la
 subasta.
+Utilizo esta funcion porque es segura: el usuario inicia la transacción, evitando problemas de gas y ataques de denegación de servicio. el modelo push (que no es recomendable para subastas publicas). Tiene como ventaja que los usuarios no precisan realizar nada 
+Escalable: no depende de la cantidad de participantes.
 5. Finalización y Cancelación
 El propietario puede finalizar la subasta manualmente antes del tiempo límite.
 El propietario puede cancelar la subasta solo si no se han realizado ofertas.
