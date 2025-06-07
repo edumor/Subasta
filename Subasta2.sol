@@ -32,15 +32,6 @@ contract Auction {
     bool private fundsWithdrawn = false; // variale control de retiro de fondos
     bool public cancelled = false; // indica si la subasta fue cancelada
 
-    // Reentrancy guard
-    uint256 private unlocked = 1;
-    modifier nonReentrant() {
-        require(unlocked == 1, "ReentrancyGuard: reentrant call");
-        unlocked = 0;
-        _;
-        unlocked = 1;
-    }
-
     // Eventos requeridos
     event NewBid(address indexed bidder, uint amount);
     event AuctionEnded(address winner, uint winningAmount);
@@ -121,7 +112,7 @@ contract Auction {
     }
 
     // Permite retirar el exceso de depósito sobre la última oferta válida durante la subasta
-    function partialWithdraw() external onlyWhileActive nonReentrant {
+    function partialWithdraw() external onlyWhileActive {
         require(msg.sender != address(0), "Invalid address");
         uint deposit = deposits[msg.sender];
         uint bidAmount = lastBid[msg.sender];
@@ -129,7 +120,7 @@ contract Auction {
         require(deposit > 0, "No deposit to withdraw");
 
         uint excess = deposit - bidAmount;
-        deposits[msg.sender] = bidAmount; // Marcar como cero antes de transferir
+        deposits[msg.sender] = bidAmount; // Efecto antes de la interacción
 
         (bool success, ) = payable(msg.sender).call{value: excess}("");
         require(success, "Failed to transfer excess");
@@ -138,14 +129,14 @@ contract Auction {
     }
 
     // Permite a los no ganadores retirar su depósito menos una comisión del 2% después de la subasta
-    function withdrawDeposit() external onlyWhenEnded nonReentrant {
+    function withdrawDeposit() external onlyWhenEnded {
         require(msg.sender != highestBidder, "Winner cannot withdraw");
         require(msg.sender != address(0), "Invalid address");
 
         uint amount = deposits[msg.sender];
         require(amount > 0, "No deposit to withdraw");
 
-        deposits[msg.sender] = 0; // Marcar como cero antes de transferir
+        deposits[msg.sender] = 0; // Efecto antes de la interacción
 
         uint fee = (amount * 2) / 100;
         uint payout = amount - fee;
@@ -170,13 +161,13 @@ contract Auction {
     }
 
     // Permite al propietario retirar la oferta ganadora después de la subasta
-    function withdrawFunds() external onlyOwner onlyWhenEnded nonReentrant {
+    function withdrawFunds() external onlyOwner onlyWhenEnded {
         require(!fundsWithdrawn, "Funds already withdrawn");
         require(highestBid > 0, "No funds to withdraw");
 
         fundsWithdrawn = true;
         uint amount = highestBid;
-        highestBid = 0; // Marcar como cero antes de transferir
+        highestBid = 0; // Efecto antes de la interacción
 
         (bool success, ) = payable(owner).call{value: amount}("");
         require(success, "Failed to withdraw funds");
@@ -191,12 +182,12 @@ contract Auction {
     }
 
     // Permite a los usuarios retirar su depósito si la subasta fue cancelada
-    function withdrawDepositOnCancel() external onlyWhenEnded nonReentrant {
+    function withdrawDepositOnCancel() external onlyWhenEnded {
         require(cancelled, "Auction was not cancelled");
         require(deposits[msg.sender] > 0, "No deposit to withdraw");
 
         uint amount = deposits[msg.sender];
-        deposits[msg.sender] = 0; // Marcar como cero antes de transferir
+        deposits[msg.sender] = 0; // Efecto antes de la interacción
 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
         require(success, "Failed to transfer deposit");
