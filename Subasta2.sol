@@ -99,13 +99,14 @@ contract Auction {
             hasBid[msg.sender] = true;
         }
 
-        // Extiende la oferta se realiza cerca del final en 10 minutos
+        // Extiende la oferta si se realiza cerca del final en 10 minutos, sin exceder el máximo
         if (block.timestamp + 10 minutes > auctionEndTime && extendedTime < maxExtensionTime) {
             uint newExtension = 10 minutes;
-            extendedTime += newExtension;
-            if (extendedTime <= maxExtensionTime) {
-                auctionEndTime += newExtension;
+            if (extendedTime + newExtension > maxExtensionTime) {
+                newExtension = maxExtensionTime - extendedTime;
             }
+            extendedTime += newExtension;
+            auctionEndTime += newExtension;
         }
 
         emit NewBid(msg.sender, newBid);
