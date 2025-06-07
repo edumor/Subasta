@@ -6,31 +6,30 @@ pragma solidity ^0.8.20;
 
 contract Auction {
     // Variables de estado principales
-    address public owner; 
-    uint public auctionEndTime; 
-    uint public maxExtensionTime = 7 days; 
-    uint public extendedTime = 0; 
+    address public owner;
+    uint public auctionEndTime;
+    uint public maxExtensionTime = 7 days;
+    uint public extendedTime = 0;
 
-    address public highestBidder; // Mejor postor actual
-    uint public highestBid; // Valor de la mejor oferta
+    address public highestBidder;
+    uint public highestBid;
 
     struct Bid {
         address bidder;
         uint amount;
     }
 
-    Bid[] public bidHistory; // Historial de ofertas
+    Bid[] public bidHistory;
 
-    mapping(address => uint) public deposits; // Mapping de depósitos de cada usuario
-    mapping(address => uint) public lastBid; // Mapping ultima oferta de cada usuario
-    mapping(address => uint) private bidIndex; // ahora privado
-    mapping(address => bool) private hasBid;   // ahora privado
-    mapping(address => uint) public lastBidTime; // Control de tiempo entre ofertas de un mismo usuario
+    mapping(address => uint) public deposits;
+    mapping(address => uint) public lastBid;
+    mapping(address => uint) private bidIndex;
+    mapping(address => bool) private hasBid;
+    mapping(address => uint) public lastBidTime;
 
-    // Variables de estado adicionales
-    bool public ended; // Booleano con el estado de la subasta
-    bool private fundsWithdrawn = false; // variale control de retiro de fondos
-    bool public cancelled = false; // indica si la subasta fue cancelada
+    bool public ended;
+    bool private fundsWithdrawn = false;
+    bool public cancelled = false;
 
     // Eventos requeridos
     event NewBid(address indexed bidder, uint amount);
@@ -43,36 +42,42 @@ contract Auction {
 
     // Modificadores de acceso y estado
     modifier onlyWhileActive() {
-        require(block.timestamp < auctionEndTime && !ended && !cancelled, "Auction has ended or cancelled");
+        require(block.timestamp < auctionEndTime, "Auction: The auction has ended.");
+        require(!ended, "Auction: The auction is marked as ended.");
+        require(!cancelled, "Auction: The auction has been cancelled.");
         _;
     }
 
     modifier onlyWhenEnded() {
-        require((block.timestamp >= auctionEndTime || ended || cancelled), "Auction has not ended yet");
+        require(block.timestamp >= auctionEndTime || ended || cancelled, "Auction: The auction has not ended yet.");
         _;
     }
 
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only the owner can execute this function");
+        require(msg.sender == owner, "Auction: Only the owner can execute this function.");
         _;
     }
 
     // Constructor: inicializa la subasta con duración en minutos
     constructor(uint _durationMinutes) {
-        require(_durationMinutes > 0, "Duration must be greater than zero");
+        require(_durationMinutes > 0, "Auction: Duration must be greater than zero.");
         owner = msg.sender;
         auctionEndTime = block.timestamp + (_durationMinutes * 1 minutes);
     }
 
     // Permite ofertar, cumpliendo reglas de subasta
     function bid() external payable onlyWhileActive {
-        require(msg.sender != owner, "Owner cannot bid");
-        require(msg.sender != address(0), "Invalid address");
-        require(msg.value > 0, "You must send ETH to bid");
-        require(!ended && !cancelled, "Auction already ended or cancelled");
+        require(msg.sender != owner, "Auction: Owner cannot bid.");
+        require(msg.sender != address(0), "Auction: Invalid address.");
+        require(msg.value > 0, "Auction: You must send ETH to bid.");
+        require(!ended, "Auction: Auction already ended.");
+        require(!cancelled, "Auction: Auction already cancelled.");
 
         // Tiempo mínimo entre ofertas del mismo usuario (1 minuto)
-        require(block.timestamp > lastBidTime[msg.sender] + 1 minutes, "Wait at least 1 minute between bids");
+        require(
+            block.timestamp > lastBidTime[msg.sender] + 1 minutes,
+            "Auction: Wait at least 1 minute between bids."
+        );
         lastBidTime[msg.sender] = block.timestamp;
 
         uint newBid = lastBid[msg.sender] + msg.value;
@@ -80,11 +85,11 @@ contract Auction {
         // La nueva oferta debe ser al menos un 5% mayor que la oferta más alta actual
         require(
             highestBid == 0 || newBid >= highestBid + (highestBid * 5 / 100),
-            "Bid must be at least 5% higher than current"
+            "Auction: Bid must be at least 5% higher than current highest bid."
         );
 
         // No puedes ofertar si ya eres el mejor postor
-        require(msg.sender != highestBidder, "You are already the highest bidder");
+        require(msg.sender != highestBidder, "Auction: You are already the highest bidder.");
 
         deposits[msg.sender] += msg.value;
         lastBid[msg.sender] = newBid;
@@ -114,28 +119,28 @@ contract Auction {
 
     // Permite retirar el exceso de depósito sobre la última oferta válida durante la subasta
     function partialWithdraw() external onlyWhileActive {
-        require(msg.sender != address(0), "Invalid address");
+        require(msg.sender != address(0), "Auction: Invalid address.");
         uint deposit = deposits[msg.sender];
         uint bidAmount = lastBid[msg.sender];
-        require(deposit > bidAmount, "No excess to withdraw");
-        require(deposit > 0, "No deposit to withdraw");
+        require(deposit > 0, "Auction: No deposit to withdraw.");
+        require(deposit > bidAmount, "Auction: No excess to withdraw.");
 
         uint excess = deposit - bidAmount;
         deposits[msg.sender] = bidAmount; // Efecto antes de la interacción
 
         (bool success, ) = payable(msg.sender).call{value: excess}("");
-        require(success, "Failed to transfer excess");
+        require(success, "Auction: Failed to transfer excess.");
 
         emit PartialWithdrawal(msg.sender, excess);
     }
 
     // Permite a los no ganadores retirar su depósito menos una comisión del 2% después de la subasta
     function withdrawDeposit() external onlyWhenEnded {
-        require(msg.sender != highestBidder, "Winner cannot withdraw");
-        require(msg.sender != address(0), "Invalid address");
+        require(msg.sender != highestBidder, "Auction: Winner cannot withdraw deposit.");
+        require(msg.sender != address(0), "Auction: Invalid address.");
 
         uint amount = deposits[msg.sender];
-        require(amount > 0, "No deposit to withdraw");
+        require(amount > 0, "Auction: No deposit to withdraw or already withdrawn.");
 
         deposits[msg.sender] = 0; // Efecto antes de la interacción
 
@@ -143,14 +148,14 @@ contract Auction {
         uint payout = amount - fee;
 
         (bool success, ) = payable(msg.sender).call{value: payout}("");
-        require(success, "Failed to transfer payout");
+        require(success, "Auction: Failed to transfer payout.");
 
         emit DepositWithdrawn(msg.sender, payout, fee);
 
         // Transfiere la comisión al propietario
         if (fee > 0) {
             (bool feeSuccess, ) = payable(owner).call{value: fee}("");
-            require(feeSuccess, "Failed to transfer fee");
+            require(feeSuccess, "Auction: Failed to transfer fee to owner.");
             emit FeeTransferred(owner, fee);
         }
     }
@@ -163,20 +168,20 @@ contract Auction {
 
     // Permite al propietario retirar la oferta ganadora después de la subasta
     function withdrawFunds() external onlyOwner onlyWhenEnded {
-        require(!fundsWithdrawn, "Funds already withdrawn");
-        require(highestBid > 0, "No funds to withdraw");
+        require(!fundsWithdrawn, "Auction: Funds already withdrawn.");
+        require(highestBid > 0, "Auction: No funds to withdraw.");
 
         fundsWithdrawn = true;
         uint amount = highestBid;
         highestBid = 0; // Efecto antes de la interacción
 
         (bool success, ) = payable(owner).call{value: amount}("");
-        require(success, "Failed to withdraw funds");
+        require(success, "Auction: Failed to withdraw funds to owner.");
     }
 
     // Permite cancelar la subasta antes de que existan ofertas
     function cancelAuction() external onlyOwner onlyWhileActive {
-        require(highestBid == 0, "Cannot cancel after bids have been placed");
+        require(highestBid == 0, "Auction: Cannot cancel after bids have been placed.");
         ended = true;
         cancelled = true;
         emit AuctionCancelled();
@@ -184,14 +189,14 @@ contract Auction {
 
     // Permite a los usuarios retirar su depósito si la subasta fue cancelada
     function withdrawDepositOnCancel() external onlyWhenEnded {
-        require(cancelled, "Auction was not cancelled");
-        require(deposits[msg.sender] > 0, "No deposit to withdraw");
-
+        require(cancelled, "Auction: Auction was not cancelled.");
         uint amount = deposits[msg.sender];
+        require(amount > 0, "Auction: No deposit to withdraw or already withdrawn.");
+
         deposits[msg.sender] = 0; // Efecto antes de la interacción
 
         (bool success, ) = payable(msg.sender).call{value: amount}("");
-        require(success, "Failed to transfer deposit");
+        require(success, "Auction: Failed to transfer deposit on cancel.");
 
         emit DepositWithdrawnOnCancel(msg.sender, amount);
     }
@@ -203,7 +208,7 @@ contract Auction {
 
     // Devuelve una página del historial de ofertas (paginación)
     function getBidHistory(uint offset, uint limit) external view returns (Bid[] memory) {
-        require(offset < bidHistory.length, "Offset out of bounds");
+        require(offset < bidHistory.length, "Auction: Offset out of bounds.");
         uint end = offset + limit;
         if (end > bidHistory.length) {
             end = bidHistory.length;
