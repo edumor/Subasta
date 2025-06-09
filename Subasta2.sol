@@ -8,7 +8,8 @@ contract Auction {
     // State variables
     address public owner;
     uint public auctionEndTime;
-    uint public maxExtensionTime = 7 days;
+    // Maximum extension allowed: 7 days in minutes (10080 minutes)
+    uint public maxExtensionTime = 10080 * 1 minutes;
     uint public extendedTime = 0;
 
     address public highestBidder;
@@ -41,7 +42,7 @@ contract Auction {
     event DepositWithdrawnOnCancel(address indexed bidder, uint amount);
     event EmergencyWithdrawal(address indexed to, uint amount);
 
-    // Modifiers
+    // Only allow actions while auction is active
     modifier onlyWhileActive() {
         require(block.timestamp < auctionEndTime, "Ended");
         require(!ended, "Ended");
@@ -49,23 +50,26 @@ contract Auction {
         _;
     }
 
+    // Only allow actions when auction has ended or cancelled
     modifier onlyWhenEnded() {
         require(block.timestamp >= auctionEndTime || ended || cancelled, "Not ended");
         _;
     }
 
+    // Only allow owner
     modifier onlyOwner() {
         require(msg.sender == owner, "Owner only");
         _;
     }
 
     // Constructor: initializes auction with fixed duration of 7 days (10080 minutes)
-    constructor() {
+    function Auction() public {
         owner = msg.sender;
         auctionEndTime = block.timestamp + (10080 * 1 minutes); // 7 days
     }
 
     // Place a bid
+    // param: msg.value - Amount of ETH sent with the bid
     function bid() external payable onlyWhileActive {
         require(msg.sender != owner, "Owner can't bid");
         require(msg.sender != address(0), "Zero addr");
@@ -109,6 +113,7 @@ contract Auction {
     }
 
     // Withdraw excess deposit above last valid bid during auction
+    // param: none
     function partialWithdraw() external onlyWhileActive {
         require(msg.sender != address(0), "Zero addr");
         uint deposit = deposits[msg.sender];
@@ -126,6 +131,7 @@ contract Auction {
     }
 
     // Owner refunds all non-winning bidders after auction ends (minus 2% fee)
+    // param: none
     function withdrawDeposits() external onlyOwner onlyWhenEnded {
         uint len = bidHistory.length;
         uint i = 0;
@@ -153,12 +159,14 @@ contract Auction {
     }
 
     // Owner ends the auction manually
+    // param: none
     function endAuction() external onlyOwner onlyWhileActive {
         ended = true;
         emit AuctionEnded(highestBidder, highestBid);
     }
 
     // Owner withdraws the winning bid after auction ends
+    // param: none
     function withdrawFunds() external onlyOwner onlyWhenEnded {
         require(!fundsWithdrawn, "Already withdrawn");
         require(highestBid > 0, "No funds");
@@ -172,6 +180,7 @@ contract Auction {
     }
 
     // Owner cancels the auction before any bids
+    // param: none
     function cancelAuction() external onlyOwner onlyWhileActive {
         require(highestBid == 0, "Bids exist");
         ended = true;
@@ -180,6 +189,7 @@ contract Auction {
     }
 
     // Users withdraw deposit if auction was cancelled
+    // param: none
     function withdrawDepositOnCancel() external onlyWhenEnded {
         require(cancelled, "Not cancelled");
         uint amount = deposits[msg.sender];
@@ -194,6 +204,7 @@ contract Auction {
     }
 
     // Emergency: Owner can recover all ETH in contract
+    // param: none
     function emergencyWithdraw() external onlyOwner {
         uint balance = address(this).balance;
         require(balance > 0, "No ETH");
@@ -203,11 +214,15 @@ contract Auction {
     }
 
     // Returns number of bids
+    // return: Number of bids
     function getBidCount() external view returns (uint) {
         return bidHistory.length;
     }
 
     // Returns a page of bid history (pagination)
+    // param: offset - Starting index
+    // param: limit - Number of bids to return
+    // return: Array of Bid structs for the requested page
     function getBidHistory(uint offset, uint limit) external view returns (Bid[] memory) {
         require(offset < bidHistory.length, "Offset OOB");
         uint end = offset + limit;
@@ -223,6 +238,7 @@ contract Auction {
     }
 
     // Returns winner and winning bid
+    // return: Address of the highest bidder and the highest bid amount
     function getWinner() external view returns (address, uint) {
         return (highestBidder, highestBid);
     }
