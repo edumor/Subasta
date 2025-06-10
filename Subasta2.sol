@@ -63,7 +63,7 @@ contract Auction {
     }
 
     // Constructor: initializes auction with fixed duration of 7 days (10080 minutes)
-    function Auction() public {
+    constructor() {
         owner = msg.sender;
         auctionEndTime = block.timestamp + (10080 * 1 minutes); // 7 days
     }
@@ -132,27 +132,34 @@ contract Auction {
 
     // Owner refunds all non-winning bidders after auction ends (minus 2% fee)
     // param: none
+    // Gas saving explanation:
+    // - The length of the bidHistory array is stored in a local variable before the loop (uint len = bidHistory.length;), so it is not recalculated on every iteration.
+    // - Each bidder's deposit is read and written only once per function execution, reducing redundant storage operations.
+    // - Transfers and events are only executed if the payout or fee is greater than zero, avoiding unnecessary calls.
+    // These practices reduce the number of storage and external calls, which are the most expensive operations in Solidity.
     function withdrawDeposits() external onlyOwner onlyWhenEnded {
         uint len = bidHistory.length;
         uint i = 0;
         for (; i < len; i++) {
             address bidder = bidHistory[i].bidder;
-            if (bidder != highestBidder && deposits[bidder] > 0) {
+            if (bidder != highestBidder) {
                 uint amount = deposits[bidder];
-                deposits[bidder] = 0;
+                if (amount > 0) {
+                    deposits[bidder] = 0;
+                    uint fee = (amount * 2) / 100;
+                    uint payout = amount - fee;
 
-                uint fee = (amount * 2) / 100;
-                uint payout = amount - fee;
+                    if (payout > 0) {
+                        (bool success, ) = payable(bidder).call{value: payout}("");
+                        require(success, "Refund fail");
+                        emit DepositWithdrawn(bidder, payout, fee);
+                    }
 
-                (bool success, ) = payable(bidder).call{value: payout}("");
-                require(success, "Refund fail");
-
-                emit DepositWithdrawn(bidder, payout, fee);
-
-                if (fee > 0) {
-                    (bool feeSuccess, ) = payable(owner).call{value: fee}("");
-                    require(feeSuccess, "Fee fail");
-                    emit FeeTransferred(owner, fee);
+                    if (fee > 0) {
+                        (bool feeSuccess, ) = payable(owner).call{value: fee}("");
+                        require(feeSuccess, "Fee fail");
+                        emit FeeTransferred(owner, fee);
+                    }
                 }
             }
         }
