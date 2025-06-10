@@ -7,10 +7,10 @@ pragma solidity ^0.8.20;
 contract Auction {
     // State variables
     address public owner;
-    uint public auctionEndTime;
+    uint private auctionEndTime;
     // Maximum extension allowed: 7 days in minutes (10080 minutes)
-    uint public maxExtensionTime = 10080 * 1 minutes;
-    uint public extendedTime = 0;
+    uint private maxExtensionTime = 10080 * 1 minutes;
+    uint private extendedTime = 0;
 
     address public highestBidder;
     uint public highestBid;
