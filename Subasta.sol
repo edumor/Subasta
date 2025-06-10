@@ -210,9 +210,10 @@ contract Auction {
         emit DepositWithdrawnOnCancel(msg.sender, amount);
     }
 
-    // Emergency: Owner can recover all ETH in contract, only if auction ended or cancelled
+    // Emergency: Owner can recover all ETH in contract, only if auction was cancelled
     // param: none
     function emergencyWithdraw() external onlyOwner onlyWhenEnded {
+        require(cancelled, "Only if cancelled");
         uint balance = address(this).balance;
         require(balance > 0, "No ETH");
         (bool success, ) = payable(owner).call{value: balance}("");
