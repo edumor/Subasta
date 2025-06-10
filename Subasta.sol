@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-// Secure Auction Contract
-// Auction duration is fixed to 7 days (10080 minutes). If a bid is placed within the last 10 minutes, the auction is extended by 10 minutes, up to a maximum of 7 days extension.
-
+/**
+ * @title Secure Auction Contract
+ * @author [Your Name]
+ * @notice Implements a secure and transparent auction with fixed duration and automatic extension.
+ * @dev All function calls are documented with English comments and NatSpec.
+ */
 contract Auction {
     // State variables
     address public owner;
@@ -42,7 +45,7 @@ contract Auction {
     event DepositWithdrawnOnCancel(address indexed bidder, uint amount);
     event EmergencyWithdrawal(address indexed to, uint amount);
 
-    // Only allow actions while auction is active
+    /// @notice Only allow actions while auction is active
     modifier onlyWhileActive() {
         require(block.timestamp < auctionEndTime, "Ended");
         require(!ended, "Ended");
@@ -50,26 +53,29 @@ contract Auction {
         _;
     }
 
-    // Only allow actions when auction has ended or cancelled
+    /// @notice Only allow actions when auction has ended or cancelled
     modifier onlyWhenEnded() {
         require(block.timestamp >= auctionEndTime || ended || cancelled, "Not ended");
         _;
     }
 
-    // Only allow owner
+    /// @notice Only allow owner
     modifier onlyOwner() {
         require(msg.sender == owner, "Owner only");
         _;
     }
 
-    // Constructor: initializes auction with fixed duration of 7 days (10080 minutes)
+    /// @notice Constructor: initializes auction with fixed duration of 7 days (10080 minutes)
     constructor() {
         owner = msg.sender;
         auctionEndTime = block.timestamp + (10080 * 1 minutes); // 7 days
     }
 
-    // Place a bid
-    // param: msg.value - Amount of ETH sent with the bid
+    /**
+     * @notice Place a bid on the auction.
+     * @dev Only non-owner, non-highestBidder, with min 5% increment, and 1 min between bids.
+     * @param None. ETH must be sent with the transaction.
+     */
     function bid() external payable onlyWhileActive {
         require(msg.sender != owner, "Owner can't bid");
         require(msg.sender != address(0), "Zero addr");
@@ -112,8 +118,10 @@ contract Auction {
         emit NewBid(msg.sender, newBid);
     }
 
-    // Withdraw excess deposit above last valid bid during auction
-    // param: none
+    /**
+     * @notice Withdraw excess deposit above last valid bid during auction.
+     * @dev Allows bidders to recover excess funds during the auction.
+     */
     function partialWithdraw() external onlyWhileActive {
         require(msg.sender != address(0), "Zero addr");
         uint deposit = deposits[msg.sender];
@@ -130,13 +138,10 @@ contract Auction {
         emit PartialWithdrawal(msg.sender, excess);
     }
 
-    // Owner refunds all non-winning bidders after auction ends (minus 2% fee)
-    // param: none
-    // Gas saving explanation:
-    // - The length of the bidHistory array is stored in a local variable before the loop (uint len = bidHistory.length;), so it is not recalculated on every iteration.
-    // - Each bidder's deposit is read and written only once per function execution, reducing redundant storage operations.
-    // - Transfers and events are only executed if the payout or fee is greater than zero, avoiding unnecessary calls.
-    // These practices reduce the number of storage and external calls, which are the most expensive operations in Solidity.
+    /**
+     * @notice Owner refunds all non-winning bidders after auction ends (minus 2% fee).
+     * @dev Only callable by owner after auction ends or is cancelled.
+     */
     function withdrawDeposits() external onlyOwner onlyWhenEnded {
         uint len = bidHistory.length;
         uint i = 0;
@@ -165,15 +170,19 @@ contract Auction {
         }
     }
 
-    // Owner ends the auction manually
-    // param: none
+    /**
+     * @notice Owner ends the auction manually before scheduled end.
+     * @dev Only callable by owner while auction is active.
+     */
     function endAuction() external onlyOwner onlyWhileActive {
         ended = true;
         emit AuctionEnded(highestBidder, highestBid);
     }
 
-    // Owner withdraws the winning bid after auction ends
-    // param: none
+    /**
+     * @notice Owner withdraws the winning bid after auction ends.
+     * @dev Only callable by owner after auction ends.
+     */
     function withdrawFunds() external onlyOwner onlyWhenEnded {
         require(!fundsWithdrawn, "Already withdrawn");
         require(highestBid > 0, "No funds");
@@ -186,8 +195,10 @@ contract Auction {
         require(success, "Owner withdraw fail");
     }
 
-    // Owner cancels the auction before any bids
-    // param: none
+    /**
+     * @notice Owner cancels the auction before any bids are placed.
+     * @dev Only callable by owner while auction is active and no bids exist.
+     */
     function cancelAuction() external onlyOwner onlyWhileActive {
         require(highestBid == 0, "Bids exist");
         ended = true;
@@ -195,8 +206,10 @@ contract Auction {
         emit AuctionCancelled();
     }
 
-    // Users withdraw deposit if auction was cancelled
-    // param: none
+    /**
+     * @notice Users withdraw deposit if auction was cancelled.
+     * @dev Only callable after auction is cancelled.
+     */
     function withdrawDepositOnCancel() external onlyWhenEnded {
         require(cancelled, "Not cancelled");
         uint amount = deposits[msg.sender];
@@ -210,8 +223,10 @@ contract Auction {
         emit DepositWithdrawnOnCancel(msg.sender, amount);
     }
 
-    // Emergency: Owner can recover all ETH in contract, only if auction was cancelled
-    // param: none
+    /**
+     * @notice Emergency: Owner can recover all ETH in contract, only if auction was cancelled.
+     * @dev Only callable by owner after auction is cancelled.
+     */
     function emergencyWithdraw() external onlyOwner onlyWhenEnded {
         require(cancelled, "Only if cancelled");
         uint balance = address(this).balance;
@@ -221,16 +236,22 @@ contract Auction {
         emit EmergencyWithdrawal(owner, balance);
     }
 
-    // Returns number of bids
-    // return: Number of bids
+    /**
+     * @notice Returns number of bids.
+     * @dev View function.
+     * @return Number of bids.
+     */
     function getBidCount() external view returns (uint) {
         return bidHistory.length;
     }
 
-    // Returns a page of bid history (pagination)
-    // param: offset - Starting index
-    // param: limit - Number of bids to return
-    // return: Array of Bid structs for the requested page
+    /**
+     * @notice Returns a page of bid history (pagination).
+     * @dev View function.
+     * @param offset Starting index.
+     * @param limit Number of bids to return.
+     * @return Array of Bid structs for the requested page.
+     */
     function getBidHistory(uint offset, uint limit) external view returns (Bid[] memory) {
         require(offset < bidHistory.length, "Offset OOB");
         uint end = offset + limit;
@@ -245,8 +266,11 @@ contract Auction {
         return page;
     }
 
-    // Returns winner and winning bid
-    // return: Address of the highest bidder and the highest bid amount
+    /**
+     * @notice Returns winner and winning bid.
+     * @dev View function.
+     * @return Address of the highest bidder and the highest bid amount.
+     */
     function getWinner() external view returns (address, uint) {
         return (highestBidder, highestBid);
     }
