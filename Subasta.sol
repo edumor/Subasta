@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 /**
  * @title Secure Auction Contract
- * @author [Your Name]
+ * @author Eduardo J. Moreno
  * @notice Implements a secure and transparent auction with fixed duration and automatic extension.
  * @dev All function calls are documented with English comments and NatSpec.
  */
@@ -186,6 +186,7 @@ contract Auction {
     function withdrawFunds() external onlyOwner onlyWhenEnded {
         require(!fundsWithdrawn, "Already withdrawn");
         require(highestBid > 0, "No funds");
+        require(address(this).balance >= highestBid, "No bal");
 
         fundsWithdrawn = true;
         uint amount = highestBid;
