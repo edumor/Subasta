@@ -6,6 +6,9 @@ pragma solidity ^0.8.20;
  * @author Eduardo J. Moreno
  * @notice Implements a secure and transparent auction with fixed duration and automatic extension.
  * @dev All function calls are documented with English comments and NatSpec.
+ * @dev La subasta dura 7 días (10080 minutos). Si hay una oferta válida en los últimos 10 minutos,
+ * la subasta se extiende automáticamente 10 minutos. Esta extensión puede repetirse varias veces,
+ * pero la subasta nunca podrá superar un máximo de 7 días extra de extensión (duración total máxima: 14 días).
  */
 contract Auction {
     // State variables
@@ -104,7 +107,8 @@ contract Auction {
             hasBid[msg.sender] = true;
         }
 
-        // Extend auction if bid is close to end
+        // Extiende la subasta 10 minutos si hay una oferta válida en los últimos 10 minutos antes de finalizar.
+        // Esta extensión puede repetirse, pero la subasta nunca podrá superar 7 días extra de extensión.
         if (block.timestamp + 10 minutes > auctionEndTime && extendedTime < maxExtensionTime) {
             uint newExtension = 10 minutes;
             if (extendedTime + newExtension > maxExtensionTime) {
