@@ -74,7 +74,6 @@ contract Auction {
     /**
      * @notice Place a bid on the auction.
      * @dev Only non-owner, non-highestBidder, with min 5% increment, and 1 min between bids.
-     * @param None. ETH must be sent with the transaction.
      */
     function bid() external payable onlyWhileActive {
         require(msg.sender != owner, "Owner can't bid");
