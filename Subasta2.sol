@@ -9,9 +9,9 @@ pragma solidity ^0.8.20;
 contract Auction {
     // State variables
     address public owner;
-    uint private auctionEndTime;
-    uint private maxExtensionTime;
-    uint private extendedTime = 0;
+    uint public auctionEndTime;      // public: frontend can read countdown
+    uint public maxExtensionTime;    // public: useful for display
+    uint public extendedTime = 0;    // public: shows how much was extended
 
     address public highestBidder;
     uint public highestBid;
@@ -73,7 +73,7 @@ contract Auction {
 
     // Place a bid
     function bid() external payable onlyWhileActive {
-        require(msg.sender != owner, "Owner can't bid");
+        require(msg.sender != owner, "Owner can\'t bid");
         require(msg.sender != address(0), "Zero addr");
         require(msg.value > 0, "No ETH");
         require(!ended, "Ended");
@@ -131,12 +131,7 @@ contract Auction {
         emit PartialWithdrawal(msg.sender, excess);
     }
 
-    /**
-     * @notice Refunds all non-winning bidders after auction ends, retaining a 2% commission for the owner.
-     * @dev Only the owner can call this function after the auction ends or is cancelled.
-     *      Each non-winning bidder receives their deposit minus a 2% fee.
-     *      The 2% commission is transferred to the owner after each refund.
-     */
+    // Refunds all non-winning bidders after auction ends, retaining a 2% commission
     function withdrawDeposits() external onlyOwner onlyWhenEnded {
         uint len = bidHistory.length;
         uint i = 0;
@@ -165,8 +160,10 @@ contract Auction {
         }
     }
 
-    // Owner ends the auction manually
-    function endAuction() external onlyOwner onlyWhileActive {
+    // Owner ends the auction (can be called at any time, before OR after expiry)
+    function endAuction() external onlyOwner {
+        require(!ended, "Already ended");
+        require(!cancelled, "Cancelled");
         ended = true;
         emit AuctionEnded(highestBidder, highestBid);
     }
@@ -243,5 +240,11 @@ contract Auction {
     // Returns winner and winning bid
     function getWinner() external view returns (address, uint) {
         return (highestBidder, highestBid);
+    }
+
+    // Returns seconds remaining in the auction (0 if ended)
+    function timeRemaining() external view returns (uint) {
+        if (block.timestamp >= auctionEndTime || ended || cancelled) return 0;
+        return auctionEndTime - block.timestamp;
     }
 }
